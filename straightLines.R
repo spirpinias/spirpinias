@@ -62,4 +62,5 @@ sendOut=list(aucScore,AverageModel,Indexes)
 return(sendOut)
 }
 
+#At the time it was doing Lasso, but you could change it. (Alpha=1 is Lasso in glmNet)
 checkThis=straightLines(predictors=metabolome,targets=phenotypes$T2D,numCores=4,numFoldsOuter=10,numFoldsInner=5,alpha=1)
