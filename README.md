@@ -10,6 +10,7 @@
 - As I think of more stuff you will find it here.
 - I aspire to write simple code and never stop learning.
 - Watch me go.
+- καλά να περνάς
 <!---
 spirpinias/spirpinias is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 You can click the Preview link to take a look at your changes.
