@@ -4,6 +4,7 @@
 - 💞️ I’m looking to collaborate on and see things measuring various phenomenona. 
 - 📫 How to reach me by email is stpirpinias@gmail.com
 - Attached Programs are Various Projects and Code I have written in the past year.
+- As I think of more stuff you will find it here.
 <!---
 spirpinias/spirpinias is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 You can click the Preview link to take a look at your changes.
