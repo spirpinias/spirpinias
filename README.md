@@ -5,6 +5,7 @@
 - 📫 How to reach me by email is stpirpinias@gmail.com
 - Attached Programs are Various Projects and Code I have written in the past year.
 - As I think of more stuff you will find it here.
+- I aspire to write simple code.
 <!---
 spirpinias/spirpinias is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 You can click the Preview link to take a look at your changes.
