@@ -1,5 +1,5 @@
-## This is a program that I wrote in the Laboratory of Jan Krumsiek for converting Metabolites into HMDI.
-## I used a web scraper to submit a form to the website.
+## This is a program that I wrote in the Laboratory of Jan Krumsiek for converting Metabolites into Human Metabolome Disease ID's.
+## I used a web scraper to submit a form to the website metaboanylst.
 
 from selenium import webdriver
 import pandas as pd
