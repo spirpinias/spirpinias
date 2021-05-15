@@ -1,7 +1,7 @@
-- 👋 Hi, I’m @spirpinias
-- 👀 I’m interested in machine learning, measuring things, and riding my bicycle.
-- 🌱 I’m currently learning convex optimization by Stephen Boyd.
-- 💞️ I’m looking to collaborate on and see new things.
+- 👋 Hi, I’m @spirpinias or you can call me Stephen.
+- 👀 I’m interested in machine learning, measuring things, and developing programs for odd jobs.
+- 🌱 I’m currently learning convex optimization by Stephen Boyd, Real Analysis by Walter Rudin, and Statistical Learning Theory by Vapnik.
+- 💞️ I’m looking to collaborate on and see new things measuring various phenomenona. 
 - 📫 How to reach me by email is stpirpinias@gmail.com
 
 <!---
