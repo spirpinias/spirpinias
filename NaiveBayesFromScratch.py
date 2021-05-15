@@ -107,6 +107,6 @@ class NaiveBayes2(object):
           
    #Running it~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
-  #Sigare is Greek for "Go Slow, man"
+  #Sigare is Greek for "Take it easy"
   sigare=NaiveBayes2('/home/spirpinias/Desktop/AMLHW2/train.csv',5000,0.01,0.75)
   sigare.Predict(targetX)
