@@ -1,7 +1,7 @@
 ## This is a homework assignment I did during my course of Applied Machine Learning at Cornell Tech in the Fall of 2020.
 ## This course was taught by Volodymyr Kuleshov and it was fantastic. See his Youtube series for the exact course.
 ## We had to create a Naive Bayes Classifier from Scratch for competing in Kaggle Competition.
-## This can likely be done a lot better but at the time I had about 6 months of real Python experience and I tried my best
+## This can likely be done a lot better but at the time I had about 6 months of real Python experience and possibly 3 months doing OOP, but I never gave up.
 
 class NaiveBayes2(object):
     
