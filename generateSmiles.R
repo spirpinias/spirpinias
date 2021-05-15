@@ -1,11 +1,18 @@
 ## This is a program that I wrote for converting metabolites into SMILES. 
 ## I was trying to find another way to study the problem. The first hurdle was the convert the Metabolites to Smiles.
-
+## This 
 
 library(purrr)
+library(readxl)
+library(tidyverse)
 
-#Get a link to the metabolomics dataset
-metabolome=
+#Data 
+metabolome=read_excel("/home/spirpinias/Desktop/QMDiab_metabolomics_Preprocessed.xlsx")
+phenotypes=read_excel("/home/spirpinias/Desktop/QMDIAB/Urine/QMDiab_phenotypes.xlsx")
+
+#Cleaning
+phenotypes=phenotypes %>% remove_rownames() %>% column_to_rownames(var="QMDiab-ID") %>% as.data.frame()
+metabolome=metabolome %>% remove_rownames() %>% column_to_rownames(var="QMDiab-ID") %>% as.data.frame() %>% select(-c(AGE,GENDER,BMI,ETH,T2D))
 
 #Get Metabolite Name Vector
 first=colnames(metabolome)
