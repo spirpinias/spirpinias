@@ -4,6 +4,7 @@
 - 💞️ I’m looking to collaborate on and see things measuring various phenomenona. 
 - 📫 How to reach me by email is stpirpinias@gmail.com
 - I taught myself Linear Algebra watching Gilbert Strang videos because I could not afford tuition prior to graduate school.
+- I taught myself how to program and then 2 of my classmates pushed me forward in graduate school into the person I am today. George and Darshana. 
 - I religiously watch MIT OCW and Stanford Engineering videos on Youtube.
 - Attached Programs are Various Projects and Code I have written in the past year.
 - As I think of more stuff you will find it here.
