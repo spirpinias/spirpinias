@@ -64,4 +64,16 @@ theList=lapply(1:length(testingFolds),function(x) {
 return(theList)
 }
 
-checkThis=dark2Foldest(predictors=metabolome,targets=phenotypes$T2D,numDepth=10,numEta=2,numThread=4,numRounds=1,numFolds=10)
+secondModel=dark2Foldest(predictors = metabolome,targets = phenotypes$T2D,numDepth = 10,numEta = 0.1,numThread = 4,numRounds = 2,numFolds = 10)
+
+#Check to see if it predicts well using AUC.
+mean(unlist(lapply(secondModel,function(x) mltools::auc_roc(preds = x$yHat$yHat,actuals = x$yHat$yTrue))))
+
+#I was investigating which predictions failed and return indices to check the phenotypes for an explanation..
+pmap(.l = list(lapply(secondModel,function(x) x$yHat$yHat),lapply(secondModel,function(x) x$yHat$yTrue),lapply(secondModel,function(x) x$yHat$Index)),function(x,y,z) z[which(x!=y)])
+
+#From the phenotypes the samples incorrectly predicted had low BMI. 
+View(phenotypes[sort(mySeq[unlist(pmap(.l = list(lapply(secondModel,function(x) x$yHat$yHat),lapply(secondModel,function(x) x$yHat$yTrue),lapply(secondModel,function(x) x$yHat$Index)),function(x,y,z) z[which(x!=y)]))],decreasing = TRUE),])
+
+#People with low BMI were harder to predict having diabetes. Which made sense... 
+                                                                                                                                               
