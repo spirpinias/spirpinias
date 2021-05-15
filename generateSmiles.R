@@ -36,6 +36,7 @@ cleanMetabolites=gsub(" ", "", cleanMetabolites, fixed = TRUE)
 cleanMetabolites=gsub("[*].*$","",cleanMetabolites)
 
 #Contact OPSIN -- This is a website service that generates SMILES from metabolites/IUPAC chemical names.
+#So I figured out a way to talk to it.
 generateSMILES=function(j){
   url=download.file(url = paste0('http://opsin.ch.cam.ac.uk/opsin/',cleanMetabolites[j],".smi"),destfile = paste0(cleanMetabolites[j],'.smi'))
 }
