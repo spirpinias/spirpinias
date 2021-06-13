@@ -5,6 +5,7 @@
 ## This implementatio uses linear models, but I have 2 other variants that are structurally identical except using randomForest and gradient boosted decision trees.
 
 #M_network is the ranked MEGENA edgelist. I have withheld the actual code for simplicity. You get the idea.
+#Exp is a gene expression matrix.
 
 network=as.data.frame(M_network)
 
