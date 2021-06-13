@@ -2,6 +2,7 @@
 ## It operates on the ranked gene list of MEGENA prior to embedding the relationships onto a planar graph. 
 ## Very simple concept. 
 ## Ranked MEGENA EdgeList -> Directed Graph -> Iterate every node and build local models using neighborhoods.
+## This implementatio uses linear models, but I have 2 other variants that are structurally identical except using randomForest and gradient boosted decision trees.
 
 #M_network is the ranked MEGENA edgelist. I have withheld the actual code for simplicity. You get the idea.
 
