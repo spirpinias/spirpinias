@@ -40,6 +40,7 @@ boot_fx=function(j){
 
 results=mclapply(followMe,boot_fx,mc.cores=numCores)
 
+#Just a thought about something. 
 AverageModel=Reduce('+',lapply(results,function(x) x$myCoefs))/as.numeric(numFolds)
 Indexes=lapply(results, function(x) x$Future)
 
