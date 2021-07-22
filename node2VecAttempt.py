@@ -1,3 +1,9 @@
+##This was an attempt I made following tutorials on using NLP skipGram intuition on graph topology to embed similar nodes based on simulated
+## random walks of vertices that were to be interpreted as sentences prior to embedding into R^D. 
+## The motivation was to utilize the embedded nodes for further ML processing. However, the embeddings were of poor quality.
+## Not because of the algorithm, but the graph itself was noisy.
+
+
 import networkx as nx
 from node2vec import Node2Vec
 from sklearn.manifold import TSNE
