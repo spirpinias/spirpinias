@@ -267,3 +267,50 @@ for (z in 1:1) {
     return(tryMeInner)
   })
 }
+
+ ## Cleaning off the lists for this network thing Qi did.
+for (j in 1:length(tryMe)) {
+  ## Cleaning off the lists for this network thing Qi did.
+  tryMe[[j]]=keep(tryMe[[j]],function(x) length(x)>2)
+}
+
+## Calculate MSE per layer. 
+mseLayers=sapply(tryMe, function(y) {
+  sapply(y,function(x) mean((x$yHat-x$actual)^2))
+})
+
+## Switch to dataframes
+mseLayers=map(mseLayers,function(x) data.frame(MSE=x))
+
+## Remove nothing, if.
+mseLayers=compact(mseLayers)
+
+## How many models have ATP6V1A included in the coefficients?
+#sapply(tryMe,function(a) sapply(a, function(b) which(names(b$coefficient)=="ATP6V1A")))
+
+## How many coefficients per model?
+coeffLayers=sapply(tryMe,function(a) sapply(a, function(b) length(b$coefficient)))
+
+## What genes were modeled?
+geneLayers=sapply(tryMe,function(a) sapply(a, function(b) b$gene))
+
+## Differential Expression Analysis using Wilcoxon Signed Rank Test.
+holler=sapply(1:nrow(exp),function(x) wilcox.test(x = as.numeric(updateMe[x,]),y = as.numeric(exp[x,]),paired=TRUE)$p.value)
+
+## Perform multiple testing correction.
+holler=p.adjust(p = holler,method = "bonferroni")
+
+## Convert significance to binary.
+holler=as.factor(as.numeric(holler<0.05))
+
+## If no difference, use a 0.
+holler[is.na(holler)]=0
+
+## Convert it to a list for now.
+wilcoxTest=map(geneLayers,function(x) holler[x])
+
+## List of MSE, # Coefficients in Model, (next) Differentially expressed (binary)?.
+graphMe=pmap(list(Gene=geneLayers,MSE=mseLayers,NumCoeff=coeffLayers,DE=wilcoxTest),cbind)
+#graphMe=map(graphMe,function(x) x[-which(x$NumCoeff==0),])
+graphMe=map(graphMe,function(x) x[which(x$DE==1),])
+     
