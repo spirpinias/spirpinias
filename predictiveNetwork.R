@@ -1,3 +1,14 @@
+## This is currently a project of mine. The idea is simple.
+## A linear model makes a prediction of a target using variables you think are important. 
+## What if I used that prediction to parameterize a normal distribution?
+## From that distribution, draw the number of samples needed to update the target expression, and continue on modeling.
+## I am introducing a ripple into the pond. 
+## I have stuck with elastic net because of the unique solution. 
+## "Moreover, for any α < 1 and λ > 0, the elastic-net problem (4.2) is strictly convex: a unique
+  ## solution exists irrespective of the correlations or duplications in the Xj ." - Statistical Learning with Sparsity Hastie, Tibshirani, and Wainwright.
+
+
+
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                      Predictive Networks 
 ##                  Developed by Stephen Pirpinias
