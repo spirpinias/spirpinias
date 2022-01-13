@@ -1,3 +1,10 @@
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                                                Code for making life easy
+##                                      Regress every variable using everything else
+##                                   Just one of many ways you may want to use a dataset
+##                                  Simple implemenation that can be changed in any way shape or form
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+
 rfkFull=function(features,numTrees,split){
   
   require(randomForest)
