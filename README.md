@@ -8,6 +8,7 @@
 - Attached Programs are Various Projects, Functions, and Code I have written in the past year.
 - As I think of more stuff you will find it here.
 - I aspire to write simple code and never stop learning.
+- You may find very simple scripts it's all for learning purposes. Maybe somebody finds it useful or as a guide.
 - Watch me go.
 - Καλά να περάσετε!
 <!---
