@@ -133,7 +133,7 @@ for (e in 1:1) {
   ## Perturb it.
   updateMe[aroundMe,]=updateMe[aroundMe,]*vectorKnockDown[e]
   
-  testingModel=map(head(layerList,2),function (d){
+  testingModel=map(layerList,function (d){
     map(d, function(j){
       
       splitData=dim(updateMe)[2]
