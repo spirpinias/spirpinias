@@ -113,17 +113,18 @@ layerList=purrr::compact(.x = layerList)
 ## Containers. 
 collectTables=list()
 collectUpdates=list()
+SimControl=list()
+euclidList=list()
 
 ## Vectors for KD or OE.
-vectorKnockDown=c(1,1/2,1/4,1/8,1/10,1/20,1/50,1/100,1/1000)
-OverExpress=c(1.00,1.50,1.75,2)
-ParamVector=c(0.001,0.0001)
-
+vectorKnockDown=c(1.00,1/2,1/4,1/8,1/16,1/32)
+OverExpress=c(1.00,1.25,1.50,1.75,2)
+  
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                                  Modeling
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-for (e in 1:length(vectorKnockDown)) {
+#length(vectorKnockDown)
+for (e in 1:1) {
   
   ## Make a copy.
   updateMe=exp0
@@ -131,7 +132,7 @@ for (e in 1:length(vectorKnockDown)) {
   ## Perturb it.
   updateMe[aroundMe,]=updateMe[aroundMe,]*vectorKnockDown[e]
   
-  testingModel=map(layerList,function (d){
+  testingModel=map(head(layerList,2),function (d){
     map(d, function(j){
       
       splitData=dim(updateMe)[2]
@@ -143,10 +144,10 @@ for (e in 1:length(vectorKnockDown)) {
       
       modelFit=glmnet::glmnet(x = as.matrix(t(train[-j,])),y = as.numeric(train[j,]),alpha = 0.5,weights=labels[samples],nlambda = 100)
       
-      myCoefs=coef(modelFit,s=0.01,exact=FALSE)  
+      myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
       myCoefs=myCoefs[myCoefs[,1]!=0,]
       
-      yHat=predict(modelFit,as.matrix(t(test[-j,])),s=0.01,type="response")
+      yHat=predict(modelFit,as.matrix(t(test[-j,])),s=0.05,type="response")
       MSE=mean((as.numeric(test[j,])-as.numeric(yHat))^2)
 
       top2=rnorm(n = dim(updateMe)[2],mean = mean(yHat),sd = sd(yHat))
@@ -158,15 +159,29 @@ for (e in 1:length(vectorKnockDown)) {
     })
   })
   
-  ## We have to re-attach the case to the modeled.
-  ## Merge the updated with the original. 
-  SimControl=list(cbind(updateMe,exp0),as.factor(c(rep(0,dim(updateMe)[2]),rep(1,dim(exp0)[2]))))
+  ## Calculate the Distances
+  euclidMap=sapply(1:dim(updateMe)[1],function(a) {
+    dist(rbind(updateMe[a,], exp0[a,]))
+  })
+  names(euclidMap)=row.names(exp0)
   
-  ## Do differential expression. Currently under construction.
+  ## Remove the Zero Distances.
+  euclidMap=euclidMap[-which(euclidMap==0)]
+  
+  ## We have to re-attach the case to the modeled.
+  design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp0)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp0)[2])))
+  colnames(design)=c("Sim","Org")
+  SimControl[[e]]=list(cbind(updateMe,exp0),design)
+  
+  ## Do differential expression.
   require(limma)
-  theTable=topTable(eBayes(lmFit(SimControl[[1]],as.numeric(SimControl[[2]]))),sort.by = "P",n=Inf)
-  theTable=tidyr::drop_na(data = theTable)
+  contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
+  vfit=lmFit(SimControl[[e]][[1]],design)
+  vfit=contrasts.fit(vfit,contrasts=contr.matrix)
+  tfit=treat(vfit,lfc=1)
+  theTable=topTreat(tfit,coef=1,n=Inf)
   
   collectTables[[e]]=theTable
   collectUpdates[[e]]=updateMe
+  euclidList[[e]]=euclidMap
 }
