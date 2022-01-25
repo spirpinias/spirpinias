@@ -124,8 +124,7 @@ OverExpress=c(1.00,1.25,1.50,1.75,2)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                                  Modeling
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#length(vectorKnockDown)
-for (e in 1:1) {
+for (e in 1:length(vectorKnockDown)) {
   
   ## Make a copy.
   updateMe=exp0
