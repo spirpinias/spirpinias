@@ -20,6 +20,7 @@ require(dplyr)
 require(tibble)
 require(ggplot2)
 require(tidyr)
+require(limma)
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                          Data Preparation 
@@ -174,7 +175,6 @@ for (e in 1:1) {
   SimControl[[e]]=list(cbind(updateMe,exp0),design)
   
   ## Do differential expression.
-  require(limma)
   contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
   vfit=lmFit(SimControl[[e]][[1]],design)
   vfit=contrasts.fit(vfit,contrasts=contr.matrix)
