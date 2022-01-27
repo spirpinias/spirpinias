@@ -21,6 +21,9 @@ require(tibble)
 require(ggplot2)
 require(tidyr)
 require(limma)
+require(data.table)
+require(magrittr)
+
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                          Data Preparation 
@@ -31,8 +34,8 @@ dir="/home/spirpinias/Desktop/BinZhang/pn/"
 setwd(dir)
 
 ## Import Expression Dataset.
-exp=read.table("msbb.BM_36.CDR_adjusted.PMI_AOD_race_sex_RIN_exonicRate_rRnaRate_batch_adj.tsv",sep = '\t', header = TRUE)
-exp=exp[,-1]
+exp=fread(file = "msbb.BM_36.CDR_adjusted.PMI_AOD_race_sex_RIN_exonicRate_rRnaRate_batch_adj.tsv") %>% as.data.frame()
+exp=column_to_rownames(.data = exp,var = "V1")
 
 ## MEGENA network 
 MEGENA_network=read.delim("BM36_CDR_adj_himem.onlyclust.megena_out.tsv",header = T)
@@ -57,7 +60,7 @@ network=MEGENA_network
 
 #Importing Expression Metadata to extract AD/Normal Labels.
 ATP6V1Ameta=read.table(file = '/home/spirpinias/Desktop/BinZhang/ANN/Rcode/BM36/msbb.meta.BM_36.tsv', sep = '\t', header = TRUE)
-ATP6V1Ameta=ATP6V1Ameta[-1,]
+ATP6V1Ameta=ATP6V1Ameta[,-1]
 
 ## Recoding Diagnosis as Factoral.
 ATP6V1Ameta$Dx.by.braak.cerad=dplyr::recode(ATP6V1Ameta$Dx.by.braak.cerad, "ADpp"=1, "Normal"=0)
@@ -66,9 +69,10 @@ labels=as.numeric(ATP6V1Ameta$Dx.by.braak.cerad)
 ## Removing Labels which Diagnosis is NA for the samples.
 exp=exp[,-which(is.na(labels)==TRUE)]
 labels=labels[-which(is.na(labels)==TRUE)]
+ATP6V1Ameta=ATP6V1Ameta[-which(is.na(labels)==TRUE),]
 
 ## Index to build the Layer List
-aroundMe=which(row.names(exp)=="TYROBP")
+aroundMe=which(row.names(exp)=="ATP6V1A")
 
 ## Subet for Control Only. Testing phase.
 exp0=exp[,which(labels==0)]
@@ -161,7 +165,7 @@ for (e in 1:length(vectorKnockDown)) {
   
   ## Calculate the Distances
   euclidMap=sapply(1:dim(updateMe)[1],function(a) {
-    dist(rbind(updateMe[a,], exp0[a,]))
+    dist(rbind(updateMe[a,],exp0[a,]))
   })
   names(euclidMap)=row.names(exp0)
   
@@ -180,6 +184,7 @@ for (e in 1:length(vectorKnockDown)) {
   tfit=treat(vfit,lfc=1)
   theTable=topTreat(tfit,coef=1,n=Inf)
   
+  ## Load the containers.
   collectTables[[e]]=theTable
   collectUpdates[[e]]=updateMe
   euclidList[[e]]=euclidMap
