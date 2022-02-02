@@ -5,7 +5,7 @@
 - 📫 How to reach me by email is stpirpinias@gmail.com
 - I taught myself Linear Algebra watching Gilbert Strang videos.
 - I religiously watch MIT OCW and Stanford Engineering videos on Youtube.
-- Attached Programs are Various Projects, Functions, and Code I have written in the past year.
+- Attached Programs are Various Projects, Functions, and Code I have written in the past years.
 - As I think of more stuff you will find it here.
 - I aspire to write simple code and never stop learning.
 - You may find very simple scripts it's all for learning purposes. Maybe somebody finds it useful or as a guide.
