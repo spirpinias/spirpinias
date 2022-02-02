@@ -12,7 +12,7 @@ gbdtFull=function(features,numDepth,numEta,numThread,numRounds,split){
   
   results=lapply(1:dim(features)[1],function (j){
     
-    splitData=dim(exp)[2]
+    splitData=dim(features)[2]
     
     samples=sample(1:splitData,size=splitData*split)
     
