@@ -133,8 +133,12 @@ for (e in 1:length(vectorKnockDown)) {
   ## Make a copy.
   updateMe=exp0
   
-  ## Perturb it.
-  updateMe[aroundMe,]=updateMe[aroundMe,]*vectorKnockDown[e]
+  ## Perturb it by Group.
+  top2Indices=unlist(ego(graph = graph,order = 2,nodes = aroundMe,mode = c("all")))
+  updateMe[aroundMe,]=updateMe[top2Indices,]*vectorKnockDown[e]
+  
+  ## Perturb it by Single.
+  #updateMe[aroundMe,]=updateMe[aroundMe,]*vectorKnockDown[e]
   
   testingModel=map(layerList,function (d){
     
@@ -191,7 +195,7 @@ for (e in 1:length(vectorKnockDown)) {
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## How many models include the gene of Interest?
-plotMe=data.frame(Layers=1:44,totalModel=unlist(map(layerList,function(b) length(b))),modelWithTYROBP=unlist(map(map(.x = map(testingModel,function(b) map(b, function(c) which(names(c$myCoefs)=="TYROBP"))),function(b) compact(b)),function(d) length(d))))
+plotMe=data.frame(Layers=1:length(layerList),totalModel=unlist(map(layerList,function(b) length(b))),modelWithTYROBP=unlist(map(map(.x = map(testingModel,function(b) map(b, function(c) which(names(c$myCoefs)=="TYROBP"))),function(b) compact(b)),function(d) length(d))))
 
 
 ## Barpots
