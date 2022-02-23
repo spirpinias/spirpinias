@@ -10,10 +10,10 @@
 
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-##                      Predictive Networks 
-##                  Developed by Stephen Pirpinias
+##                      Predictive Networks with Weights 
+##                       Developed by Stephen Pirpinias
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  
+
 require(igraph)
 require(purrr)
 require(dplyr)
@@ -23,12 +23,12 @@ require(tidyr)
 require(limma)
 require(data.table)
 require(magrittr)
-
+require(gt)
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                          Data Preparation 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  
+
 ## Set directory for files.
 dir="/home/spirpinias/Desktop/BinZhang/pn/"
 setwd(dir)
@@ -78,14 +78,14 @@ aroundMe=which(row.names(exp)=="TYROBP")
 exp0=exp[,which(labels==0)]
 exp1=exp[,which(labels==1)]
 
-## Simulation.
-splitHere=which(as.numeric(exp0[aroundMe,]<mean(as.numeric(exp0[aroundMe,])))==1)
-exp0Low=exp0[,splitHere]
-exp0High=exp0[,-splitHere]
-
-splitHere2=which(as.numeric(exp1[aroundMe,]<mean(as.numeric(exp1[aroundMe,])))==1)
-exp1Low=exp1[,splitHere2]
-exp1High=exp1[,-splitHere2]
+# ## Simulation.
+# splitHere=which(as.numeric(exp0[aroundMe,]<mean(as.numeric(exp0[aroundMe,])))==1)
+# exp0Low=exp0[,splitHere]
+# exp0High=exp0[,-splitHere]
+# 
+# splitHere2=which(as.numeric(exp1[aroundMe,]<mean(as.numeric(exp1[aroundMe,])))==1)
+# exp1Low=exp1[,splitHere2]
+# exp1High=exp1[,-splitHere2]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                             Create the Graph
@@ -119,93 +119,99 @@ layerList=purrr::compact(.x = layerList)
 collectTables=list()
 collectUpdates=list()
 SimControl=list()
-euclidList=list()
+collectTablesBoot=list()
 
 ## Vectors for KD or OE.
 vectorKnockDown=c(1.00,1/2,1/4,1/8,1/16,1/32,1/64,1/100,1/1000)
 OverExpress=c(1.00,1.25,1.50,1.75,2)
-  
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                                  Modeling
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-for (e in 1:length(vectorKnockDown)) {
+## Boot Strapping for 10 iterations.
+for (j in 1:10) {
   
-  ## Make a copy.
-  updateMe=exp0
-  
-  ## Perturb it by Group.
-  top2Indices=unlist(ego(graph = graph,order = 2,nodes = aroundMe,mode = c("all")))
-  updateMe[aroundMe,]=updateMe[top2Indices,]*vectorKnockDown[e]
-  
-  ## Perturb it by Single.
-  #updateMe[aroundMe,]=updateMe[aroundMe,]*vectorKnockDown[e]
-  
-  testingModel=map(layerList,function (d){
+  for (e in 1:length(vectorKnockDown)) {
     
-    myPenalty=rep(1,dim(exp)[1])
-    myPenalty[c(d,aroundMe)]=0
-  
-    map(d, function(j){
+    ## Make a copy.
+    updateMe=exp1
+    
+    ## Perturb it by Group.
+    #top2Indices=unlist(ego(graph = graph,order = 2,nodes = aroundMe,mode = c("all")))
+    #updateMe[aroundMe,]=updateMe[top2Indices,]*vectorKnockDown[e]
+    
+    testingModel=imap(head(layerList,6),function (d,d2){
       
-      splitData=dim(updateMe)[2]
+      myPenalty=rep(1,dim(exp)[1])
+      myPenalty[c(d,aroundMe)]=0
       
-      samples=sample(1:splitData,size=splitData*0.80)
-      
-      train=updateMe[,samples]
-      test=updateMe[,-samples]
-      
-      
-      modelFit=glmnet::glmnet(x = as.matrix(t(train[-j,])),y = as.numeric(train[j,]),alpha = 0.5,weights=labels[samples],nlambda = 100,penalty.factor = myPenalty[-j])
-      
-      myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
-      myCoefs=myCoefs[myCoefs[,1]!=0,]
-      
-      yHat=predict(modelFit,as.matrix(t(test[-j,])),s=0.05,type="response")
-      MSE=mean((as.numeric(test[j,])-as.numeric(yHat))^2)
-
-      top2=rnorm(n = dim(updateMe)[2],mean = mean(yHat),sd = sd(yHat))
-
-      updateMe[j,]<<-top2
-      
-      print(paste("Gene",j,"Iteration",e))
-      
-      res=list(MSE=MSE,myCoefs=myCoefs)
+      imap(d, function(j,j2){
+        ## Recopy TYROBP
+        updateMe[aroundMe,]=exp1[aroundMe,]
+        
+        ## Split the Data.
+        splitData=dim(updateMe)[2]
+        
+        ## Partition
+        samples=sample(1:splitData,size=splitData*0.80)
+        
+        ## Train/Test
+        train=updateMe[,samples]
+        test=updateMe[,-samples]
+        
+        ## Modeling
+        modelFit=glmnet::glmnet(x = as.matrix(t(train[-j,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100,penalty.factor = myPenalty[-j])
+        
+        ## Coefficients
+        myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
+        myCoefs=myCoefs[myCoefs[,1]!=0,]
+        
+        ## I have to perturb the gene right here and capture the effect.
+        test[aroundMe,]=test[aroundMe,]*vectorKnockDown[e]
+        
+        ## Make the prediction.
+        yHat=predict(modelFit,as.matrix(t(test[-j,])),s=0.05,type="response")
+        MSE=mean((as.numeric(test[j,])-as.numeric(yHat))^2)
+        
+        ## Updating scheme.
+        top2=rnorm(n = dim(updateMe)[2],mean = mean(yHat),sd = sd(yHat))
+        
+        ## Save it.
+        updateMe[j,]<<-top2
+        
+        print(paste("Gene",j,"Iteration",e))
+        
+        res=list(Gene=row.names(exp)[j],Index=c(d2,j2),MSE=MSE,myCoefs=myCoefs)
+      })
     })
-  })
-
-  ## We have to re-attach the case to the modeled.
-  design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp0)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp0)[2])))
-  colnames(design)=c("Sim","Org")
-  SimControl[[e]]=list(cbind(updateMe,exp0),design)
+    
+    ## We have to re-attach the case to the modeled.
+    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp1)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp1)[2])))
+    colnames(design)=c("Sim","Org")
+    SimControl[[e]]=list(cbind(updateMe,exp1),design)
+    
+    ## Do differential expression.
+    contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
+    vfit=lmFit(SimControl[[e]][[1]],design)
+    vfit=contrasts.fit(vfit,contrasts=contr.matrix)
+    tfit=treat(vfit,lfc=1)
+    theTable=topTreat(tfit,coef=1,n=Inf)
+    theTable=tibble::rownames_to_column(.data = theTable,var = "Geneid")
+    theTable=data.table(theTable)
+    theTable=theTable[adj.P.Val<0.05] 
+    
+    ## Load the containers.
+    collectTables[[e]]=theTable
+    collectUpdates[[e]]=testingModel
+  }
   
-  ## Do differential expression.
-  contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
-  vfit=lmFit(SimControl[[e]][[1]],design)
-  vfit=contrasts.fit(vfit,contrasts=contr.matrix)
-  tfit=treat(vfit,lfc=1)
-  theTable=topTreat(tfit,coef=1,n=Inf)
-  
-  ## Load the containers.
-  collectTables[[e]]=theTable
-  collectUpdates[[e]]=testingModel
+ collectTablesBoot[[j]]=collectTables 
 }
-
-## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-##                              Models with the Variable
-## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-## How many models include the gene of Interest?
-plotMe=data.frame(Layers=1:length(layerList),totalModel=unlist(map(layerList,function(b) length(b))),modelWithTYROBP=unlist(map(map(.x = map(testingModel,function(b) map(b, function(c) which(names(c$myCoefs)=="TYROBP"))),function(b) compact(b)),function(d) length(d))))
-
-
-## Barpots
-barplot(plotMe[,3],col="black",xlab = "Number of Layers outside TYROBP",ylab="Number of Models",main="Models with TYROBP")
-
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                              Cell Line Validation - TYROBP
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## TYROBP Cell Line
+## TYROBP Cell Line ... do unique here.
 TYROBP=fread("/home/spirpinias/Downloads/TYROBP.KO.tsv",header = TRUE,sep='\t')
 
 ## Subset TYROBP Contrasts into respective dataframes and clean out any repeats.
@@ -225,7 +231,7 @@ TYROPs1KO1WT$Geneid=toupper(TYROPs1KO1WT$Geneid)
 first=TYROKOWT[TYROAPPWT,on=.(Geneid),.(Geneid,logFC,i.logFC)]
 second=first[TYROPs1KO1WT,on=.(Geneid),]
 TYROBP=second[,.(Geneid,KOvsWT=logFC,APPvsWT=i.logFC,s1K01vsWT=i.logFC.1)]
-  
+
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                              Cell Line Validation - ATP6V1A 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -247,21 +253,34 @@ ATPkdVSwt_in_ab$Geneid=toupper(ATPkdVSwt_in_ab$Geneid)
 ATPab_kdVSWT_unchallen$Geneid=toupper(ATPab_kdVSWT_unchallen$Geneid)
 ATPkd_vs_wd_in_unchallenged$Geneid=toupper(ATPkd_vs_wd_in_unchallenged$Geneid)
 
+## ATP6V1A
+first=ATPkdVSwt_in_ab[ATPab_kdVSWT_unchallen,on=.(Geneid),.(Geneid,logFC,i.logFC)]
+second=first[ATPkd_vs_wd_in_unchallenged,on=.(Geneid),]
+ATP6V1A=second[,.(Geneid,ATPkdVsWT_inAB=logFC,ATPab_kdVsWT_unchallen=i.logFC,ATPkdVsWd_in_Unchallenged=i.logFC.1)]
+
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                              Results & Visualizations
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Results.
+## Results. TYROBP.
 ResultsFinal=map(.x = collectTables,.f = function(b) {
-  b=rownames_to_column(.data = b,var = "Geneid")
   finalFrame=inner_join(x = TYROBP,y = b,by="Geneid")
   finalFrame=finalFrame[,.(Geneid,KOvsWT,APPvsWT,s1K01vsWT,Simulated=logFC)]
   return(finalFrame)  
-  })
+})
+
+## Results. ATP6V1A
+ResultsFinal=map(.x = collectTables,.f = function(b) {
+  finalFrame=inner_join(x = ATP6V1A,y = b,by="Geneid")
+  finalFrame=finalFrame[,.(Geneid,ATPkdVsWT_inAB,ATPab_kdVsWT_unchallen,ATPkdVsWd_in_Unchallenged,Simulated=logFC)]
+  return(finalFrame)  
+})
+
 
 ## Plot the Results.
 colors=c('Simulated'='black','KOvsWT'='red','APPvsWT'='green','s1K01vsWT'='yellow')
+
 ResultsPlots=map(.x = ResultsFinal,.f = function(c) {
   require(ggplot2)
   ggplot(c,aes(x=1:dim(c)[1]))+
@@ -271,5 +290,20 @@ ResultsPlots=map(.x = ResultsFinal,.f = function(c) {
     geom_line(aes(y=Simulated, color="Simulated"),size=0.4)+
     labs(x="Genes Predicted",y="Log Fold Change",title="Cascade Effect for TYROBP Knockout",subtitle="Elastic Net",color="Legend")+
     scale_color_manual(values=colors)
-    #ggsave("/home/spirpinias/Desktop/ATPknockDown",device = "png",width=6,height=6)
+  #ggsave("/home/spirpinias/Desktop/ATPknockDown",device = "png",width=6,height=6)
+})
+
+
+colors=c('Simulated'='black','ATPkdVsWT_inAB'='red','ATPab_kdVsWT_unchallen'='green','ATPkdVsWd_in_Unchallenged'='yellow')
+
+ResultsPlots=map(.x = ResultsFinal,.f = function(c) {
+  require(ggplot2)
+  ggplot(c,aes(x=1:dim(c)[1]))+
+    geom_line(aes(y=Simulated, color="Simulated"),linetype="dashed",size=0.4)+
+    geom_line(aes(y=ATPkdVsWT_inAB, color="ATPkdVsWT_inAB"),size=0.4)+
+    geom_line(aes(y=ATPab_kdVsWT_unchallen, color="ATPab_kdVsWT_unchallen"),size=0.4)+
+    geom_line(aes(y=ATPkdVsWd_in_Unchallenged, color="ATPkdVsWd_in_Unchallenged"),size=0.4)+
+    labs(x="Genes Predicted",y="Log Fold Change",title="Cascade Effect for TYROBP Knockout",subtitle="Elastic Net",color="Legend")+
+    scale_color_manual(values=colors)
+  #ggsave("/home/spirpinias/Desktop/ATPknockDown",device = "png",width=6,height=6)
 })
