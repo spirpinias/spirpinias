@@ -1,6 +1,7 @@
 ## This is my first implementation of a variational autoencoder for a project I was working on.
 ## It is not perfect but I was learning how to map the dimensions down to the latent variables for analysis.
 ## This particular dataset did not have signal using the labels I was given. 
+## It is largely based off the Tutorial on the Keras website. I just put it together for my use and learning how to build it.
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                      Variational Autoencoder for MSBB 
