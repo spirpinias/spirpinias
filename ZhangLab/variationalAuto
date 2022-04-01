@@ -1,0 +1,179 @@
+## This is my first implementation of a variational autoencoder for a project I was working on.
+## It is not perfect but I was learning how to map the dimensions down to the latent variables for analysis.
+## This particular dataset did not have signal using the labels I was given. 
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                      Variational Autoencoder for MSBB 
+##                       Developed by Stephen Pirpinias
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+require(purrr)
+require(dplyr)
+require(tibble)
+require(ggplot2)
+require(tidyr)
+require(data.table)
+reticulate::use_python(python = "/usr/bin/python3")
+if (tensorflow::tf$executing_eagerly())
+  tensorflow::tf$compat$v1$disable_eager_execution()
+library(keras)
+
+
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Data Preparation 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Set directory for files.
+dir="/home/spirpinias/Desktop/BinZhang/pn/"
+setwd(dir)
+
+## Import Expression Dataset.
+exp=fread(file = "msbb.BM_36.CDR_adjusted.PMI_AOD_race_sex_RIN_exonicRate_rRnaRate_batch_adj.tsv") %>% as.data.frame()
+exp=column_to_rownames(.data = exp,var = "V1")
+
+#Importing Expression Metadata to extract AD/Normal Labels.
+ATP6V1Ameta=fread(file = '/home/spirpinias/Desktop/BinZhang/ANN/Rcode/BM36/msbb.meta.BM_36.tsv', sep = '\t', header = TRUE,na.strings = "NA")
+ATP6V1Ameta=na.omit(ATP6V1Ameta)
+exp=exp[,match(ATP6V1Ameta$Sampleid,colnames(exp))]
+
+## Recoding Diagnosis as Factor.
+ATP6V1Ameta$Dx.by.braak.cerad=dplyr::recode(ATP6V1Ameta$Dx.by.braak.cerad, "ADpp"=1, "Normal"=0)
+ATP6V1Ameta$SEX_inferred=dplyr::recode(ATP6V1Ameta$SEX_inferred,"F"=0,"M"=1)
+ATP6V1Ameta$RACE_inferred=dplyr::recode(ATP6V1Ameta$RACE_inferred, "W"=1,"A"=0,"B"=0,"H"=0,"U"=0)
+
+## Removing Labels which Diagnosis is NA for the samples.
+exp=scale(x = exp)
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Constructing Variational Autoencoder 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+K=keras::backend()
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Parameters 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+batch_size=100L
+original_dim=23201L
+latent_dim=250L
+intermediate_dim=11600L
+intermediate_dim_2=5800L
+intermediate_dim_3=2900L
+intermediate_dim_4=1000L
+intermediate_dim_5=500L
+epochs=25L
+epsilon_std=1.0
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Model Definition 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Encoding Layers
+x=layer_input(shape = c(original_dim))
+h=layer_dense(x, intermediate_dim, activation = "relu")
+h_2=layer_dense(h, intermediate_dim_2, activation = "relu")
+h_3=layer_dense(h_2, intermediate_dim_3, activation = "relu")
+h_4=layer_dense(h_3, intermediate_dim_4, activation = "relu")
+h_5=layer_dense(h_4, intermediate_dim_5, activation = "relu")
+
+## To the mean and variance distribution.
+## If no activation is specified, no activation is applied. 
+## latent dimension is 250. 
+z_mean=layer_dense(h_5, latent_dim)
+z_log_var=layer_dense(h_5, latent_dim)
+
+## This layer_dense goes from 500 to 250, which is the latent dimensionaliy.
+
+## Now we are going to sample the latent dimension.
+## This is drawing a sample of the latent variable.
+sampling=function(arg){
+  z_mean=arg[, 1:(latent_dim)]
+  z_log_var=arg[, (latent_dim + 1):(2 * latent_dim)]
+  
+  epsilon=k_random_normal(
+    shape=c(k_shape(z_mean)[[1]]), 
+    mean=0.,
+    stddev=epsilon_std
+  )
+  
+  z_mean + k_exp(z_log_var/2)*epsilon
+}
+
+# note that "output_shape" isn't necessary with the TensorFlow backend
+z=layer_concatenate(list(z_mean, z_log_var)) %>% 
+  layer_lambda(sampling)
+
+## TBD
+## Goes from 250 back to 500 and so on.
+decoder_h5=layer_dense(z,intermediate_dim_4,activation = "relu")
+decoder_h4=layer_dense(decoder_h5,intermediate_dim_3,activation="relu")
+decoder_h3=layer_dense(decoder_h4,intermediate_dim_2,activation="relu")
+decoder_h2=layer_dense(decoder_h3,intermediate_dim,activation = "relu")
+decoder_h=layer_dense(units=intermediate_dim, activation = "relu")
+decoder_mean=layer_dense(units = original_dim, activation = "linear")
+
+h_decoded=decoder_h(decoder_h2)
+x_decoded_mean=decoder_mean(h_decoded)
+
+# end-to-end autoencoder
+vae=keras_model(x, x_decoded_mean)
+
+# Encoder projects data to the latent space.
+encoder=keras_model(x, z_mean)
+
+# Generator projects latent simulations to the original space.
+## Currently not working also not entirely too concerned with it atm.
+
+# decoder_input=layer_input(shape = latent_dim)
+# h_decoded_2=decoder_h(decoder_input)
+# x_decoded_mean_2=decoder_mean(h_decoded_2)
+# generator=keras_model(decoder_input, x_decoded_mean_2)
+
+## Optimization
+vae %>% compile(optimizer = "sgd", loss = "mean_squared_error")
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Data Preparation 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+trainIndices=sample(x = dim(exp)[2],size = dim(exp)[2]*0.80)
+x_train=t(exp)[trainIndices,]
+x_test=t(exp)[-trainIndices,]
+
+
+# Model training ----------------------------------------------------------
+
+vae %>% fit(
+  x_train, x_train, 
+  shuffle = TRUE, 
+  epochs = epochs, 
+  batch_size = batch_size, 
+  validation_data = list(x_test, x_test)
+)
+
+
+# Visualizations ----------------------------------------------------------
+
+library(ggplot2)
+library(dplyr)
+
+x_test_encoded <- predict(encoder, x_test, batch_size = batch_size)
+
+ATPmetaVisualize=ATP6V1Ameta[-trainIndices,]
+
+## Doing PCA.
+encodedPCA=prcomp(x = x_test_encoded)
+encodedtransform=x_test_encoded%*%encodedPCA$rotation[,1:2]
+encodedtransform=cbind(encodedtransform,Braak=ATPmetaVisualize$Dx.by.braak.cerad,Sex=ATPmetaVisualize$SEX_inferred,Race=ATPmetaVisualize$RACE_inferred)
+
+ggplot(as.data.frame(encodedtransform),aes(x=PC1,y=PC2,color=Braak))+geom_point(size=6)
+
+## Doing a UMAP
+require(umap)
+encodedUMAP=umap(d = x_test_encoded)
+encodedUMAPtransform=cbind(encodedUMAP$layout,Braak=ATPmetaVisualize$Dx.by.braak.cerad,Sex=ATPmetaVisualize$SEX_inferred,Race=ATPmetaVisualize$RACE_inferred)
+colnames(encodedUMAPtransform)=c("UMAP1","UMAP2","Braak","Sex","Race")
+
+ggplot(as.data.frame(encodedUMAPtransform),aes(x=UMAP1,y=UMAP2,color=Sex))+geom_point(size=6)
