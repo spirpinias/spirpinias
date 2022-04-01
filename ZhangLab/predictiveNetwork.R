@@ -1,6 +1,6 @@
 ## This is currently a project of mine. The idea is simple.
 ## A linear model makes a prediction of a target using variables you think are important. 
-## What if I used that prediction to parameterize a normal distribution?
+## What if I used that prediction with perturbation of feature to parameterize a normal distribution?
 ## From that distribution, draw the number of samples needed to update the target vector, and continue on modeling.
 ## I am introducing a ripple into the pond. 
 ## I have stuck with elastic net because of the unique solution. 
