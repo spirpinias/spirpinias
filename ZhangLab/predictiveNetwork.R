@@ -25,6 +25,46 @@ require(data.table)
 require(magrittr)
 require(gt)
 
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Functions 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+findGene=function(geneName){
+  
+  ## Example testing=findGene("ATP6V1A") 
+  firstX=which(row.names(lookUpTable)==as.character(geneName))
+  secondX=lookUpTable[firstX,]
+  thirdX=collectUpdates[[1]][[as.numeric(secondX$Inner)]][[as.numeric(secondX$Outer)]]
+  thirdX$myCoefs=names(thirdX$myCoefs)[-1]
+  return(thirdX)
+}
+
+buildSubNetwork=function(target,predictors){
+  require(visNetwork)
+  
+  ## Example testing2=buildSubNetwork(testing$Gene,testing$myCoefs)
+  center=which(row.names(exp)==as.character(target))
+  neigh=match(x = predictors,table = row.names(exp))
+  subGraph=induced.subgraph(graph = graph,v = as.numeric(c(center,neigh)),impl = "auto")
+  V(subGraph)[1]$color="red"
+  outGraph=plot(x = subGraph,vertex.size=28,vertex.shape="circle",vertex.label=row.names(exp)[c(center,neigh)],vertex.label.cex=1)
+  
+  return(outGraph)
+}
+
+buildScatterPlot=function(Gene){
+  
+  ## UpdatedMe/Original
+  scat=which(row.names(exp)==as.character(Gene))
+  Skim=data.frame(Expression=c(as.numeric(SimControl[[1]][[1]][scat,1:27]),as.numeric(SimControl[[1]][[1]][scat,28:54])),
+                  Labels=SimControl[[1]][[2]][,1])
+  Skim$Labels=dplyr::recode(Skim$Labels, "1"="Simulated", "0"="Original")
+  p=ggplot(data = Skim,mapping = aes(x=Expression,color=Labels))+geom_density()+labs(title=paste("Distribution of",as.character(Gene)))
+  return(p)  
+}
+
+
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                          Data Preparation 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,21 +78,43 @@ exp=fread(file = "msbb.BM_36.CDR_adjusted.PMI_AOD_race_sex_RIN_exonicRate_rRnaRa
 exp=column_to_rownames(.data = exp,var = "V1")
 
 ## MEGENA network 
-MEGENA_network=read.delim("BM36_CDR_adj_himem.onlyclust.megena_out.tsv",header = T)
+MEGENA_network=fread("BM36_CDR_adj_himem.onlyclust.megena_out.tsv",header = T,drop=1) %>% as.data.frame
+colnames(MEGENA_network)=c("Start","Finish","Weight")
 
-## Use only genes in MEGENA and subset expression.
+## Use only genes in MEGENA and subset expression. Some are NA, remove them.
 genesInvolved=union(x = MEGENA_network[,1],y = MEGENA_network[,2])
 exp=exp[match(genesInvolved,row.names(exp)),]
 exp=exp[grepl("^NA", rownames(exp))==F,]
 
-## Encode the network based on indices.
-MEGENA_network=sapply(MEGENA_network[,-3],function(x) match(x,row.names(exp)))
+## MEGENA keydrivers
+MEGENA_keydrivers=read.delim("all_BN_keydrivers_CTD_subtypes.txt",header = T)
+MEGENA_keydrivers=data.frame(Keydriver=intersect(MEGENA_keydrivers$keydrivers,row.names(exp)),Index=match(intersect(MEGENA_keydrivers$keydrivers,row.names(exp)),row.names(exp)))
 
-## Remove NA from MEGENA 
-MEGENA_network=tidyr::drop_na(data = as.data.frame(MEGENA_network))
+
+## Encode the network based on indices.
+MEGENA_network=data.frame(Start=match(MEGENA_network$Start,row.names(exp)),Finish=match(MEGENA_network$Finish,row.names(exp)),Weight=MEGENA_network$Weight) %>% na.omit() %>% as.data.frame()
+
 
 ## Ready
 network=MEGENA_network
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                             Create the Graph
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Read in the Directed Graph.
+graph=graph_from_edgelist(as.matrix(network[,1:2],ncol=2), directed =T)
+#graph=graph_from_data_frame(d = network,directed = FALSE)
+
+## Adjacency Matrix. Maybe used this to weight the variables.
+#ad.matrix=as_adjacency_matrix(graph, type = c("both"))
+
+## Weight Adjanceny Matrix.
+##as_adjacency_matrix(graph = graph,attr = "weight")
+
+## Degree Matrix. Maybe use this to weight the variables.
+de=degree(graph)
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                           Meta Data
@@ -67,38 +129,31 @@ ATP6V1Ameta$Dx.by.braak.cerad=dplyr::recode(ATP6V1Ameta$Dx.by.braak.cerad, "ADpp
 labels=as.numeric(ATP6V1Ameta$Dx.by.braak.cerad)
 
 ## Removing Labels which Diagnosis is NA for the samples.
-exp=exp[,-which(is.na(labels)==TRUE)]
-labels=labels[-which(is.na(labels)==TRUE)]
+exp=exp[-which(de==0),-which(is.na(labels)==TRUE)]
 ATP6V1Ameta=ATP6V1Ameta[-which(is.na(labels)==TRUE),]
+labels=labels[-which(is.na(labels)==TRUE)]
+
+
+## Remove the genes with zero degree from connectivity and graph.
+graph=delete_vertices(graph = graph,v = which(de==0))
+de=de[-which(de==0)]
 
 ## Index to build the Layer List
-aroundMe=which(row.names(exp)=="TYROBP")
+aroundMe=which(row.names(exp)=="ATP6V1A")
 
 ## Subet for Control Only. Testing phase.
 exp0=exp[,which(labels==0)]
 exp1=exp[,which(labels==1)]
 
 # ## Simulation.
-# splitHere=which(as.numeric(exp0[aroundMe,]<mean(as.numeric(exp0[aroundMe,])))==1)
-# exp0Low=exp0[,splitHere]
-# exp0High=exp0[,-splitHere]
-# 
-# splitHere2=which(as.numeric(exp1[aroundMe,]<mean(as.numeric(exp1[aroundMe,])))==1)
-# exp1Low=exp1[,splitHere2]
-# exp1High=exp1[,-splitHere2]
+splitHere=which(as.numeric(exp0[aroundMe,]<mean(as.numeric(exp0[aroundMe,])))==1)
+exp0Low=exp0[,splitHere]
+exp0High=exp0[,-splitHere]
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                             Create the Graph
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+splitHere2=which(as.numeric(exp1[aroundMe,]<mean(as.numeric(exp1[aroundMe,])))==1)
+exp1Low=exp1[,splitHere2]
+exp1High=exp1[,-splitHere2]
 
-## Read in the Directed Graph.
-graph=graph_from_edgelist(as.matrix(network[,1:2],ncol=2), directed =T)
-
-## Adjacency Matrix. Maybe used this to weight the variables.
-#ad.matrix=as_adjacency_matrix(graph, type = c("both"))
-
-## Degree Matrix. Maybe use this to weight the variables.
-de=degree(graph)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                               Building the Layers
@@ -120,34 +175,39 @@ collectTables=list()
 collectUpdates=list()
 SimControl=list()
 collectTablesBoot=list()
+lookUpTable=data.frame()
 
 ## Vectors for KD or OE.
-vectorKnockDown=c(1.00,1/2,1/4,1/8,1/16,1/32,1/64,1/100,1/1000)
-OverExpress=c(1.00,1.25,1.50,1.75,2)
+vectorKnockDown=c(1/2)
+OverExpress=c(1.50)
+numNeighbor=1
+
+## Only Keydrivers in 3 layers. TEMPORARY.
+MEGENA_keydrivers=MEGENA_keydrivers[match(intersect(unlist(layerList[1:3]),MEGENA_keydrivers$Index),MEGENA_keydrivers$Index),]
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                                  Modeling
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Boot Strapping for 10 iterations.
-for (j in 1:10) {
+for (b in 1:2) {
   
   for (e in 1:length(vectorKnockDown)) {
     
     ## Make a copy.
-    updateMe=exp1
-    
-    ## Perturb it by Group.
-    #top2Indices=unlist(ego(graph = graph,order = 2,nodes = aroundMe,mode = c("all")))
-    #updateMe[aroundMe,]=updateMe[top2Indices,]*vectorKnockDown[e]
-    
-    testingModel=imap(head(layerList,6),function (d,d2){
+    updateMe=exp0High
+
+    testingModel=imap(head(layerList,2),function (d,d2){
       
-      myPenalty=rep(1,dim(exp)[1])
-      myPenalty[c(d,aroundMe)]=0
-      
+        
       imap(d, function(j,j2){
-        ## Recopy TYROBP
-        updateMe[aroundMe,]=exp1[aroundMe,]
+        
+        if (b==1) {
+          lookUpTable<<-rbind(lookUpTable,c(row.names(exp)[j],c(d2,j2)))
+        }
+        
+        ## Recopy TYROBP to correct after perturbing.
+        updateMe[aroundMe,]=exp0High[aroundMe,]
         
         ## Split the Data.
         splitData=dim(updateMe)[2]
@@ -159,36 +219,82 @@ for (j in 1:10) {
         train=updateMe[,samples]
         test=updateMe[,-samples]
         
-        ## Modeling
-        modelFit=glmnet::glmnet(x = as.matrix(t(train[-j,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100,penalty.factor = myPenalty[-j])
+        ## Intersect with keydrivers to find the variables.
+        indep=intersect(unlist(ego(graph = graph,order = numNeighbor,nodes = j,mode = c("all")))[-1],MEGENA_keydrivers$Index)
         
-        ## Coefficients
-        myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
-        myCoefs=myCoefs[myCoefs[,1]!=0,]
+        if (length(indep)>=2) {
+          
+          # Modeling
+          modelFit=glmnet::glmnet(x = as.matrix(t(train[indep,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100)
+          
+          ## Coefficients
+          myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
+          myCoefs=myCoefs[myCoefs[,1]!=0,]
+          
+          ## I have to perturb the gene right here and capture the effect.
+          test[aroundMe,]=test[aroundMe,]*vectorKnockDown[e]
+          
+          ## Make the prediction.
+          yHat=predict(modelFit,as.matrix(t(test[indep,])),s=0.05,type="response")
+          MSE=mean((as.numeric(test[j,])-as.numeric(yHat))^2)
+          
+          ## Updating scheme.
+          top2=rnorm(n = dim(updateMe)[2],mean = mean(yHat),sd = sd(yHat))
+          
+          ## Save it.
+          updateMe[j,]<<-top2
+          
+          print(paste("Gene",j,"Iteration",b))
+          
+          res=list(Gene=row.names(exp)[j],MSE=MSE,myCoefs=myCoefs,Driver=TRUE)
+        }
+        else{
+          
+          ## Key Drivers were null. Use connectivity. 
+          connectMe=data.frame(Index=unlist(ego(graph = graph,order = numNeighbor,nodes = j,mode = c("all")))[-1],Connect=de[unlist(ego(graph = graph,order = numNeighbor,nodes = j,mode = c("all")))[-1]])
+          
+          ## Sort the dataframe in order of highest connectivity.
+          connectMe=connectMe[order(-connectMe$Connect),]
+          indepConnect=head(connectMe$Index,n=5)
+          
+          if(length(indepConnect)>= 2) {
+            ## Modeling
+            modelFit=glmnet::glmnet(x = as.matrix(t(train[indepConnect,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100)
+            
+            ## Coefficients
+            myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
+            myCoefs=myCoefs[myCoefs[,1]!=0,]
+            
+            ## I have to perturb the gene right here and capture the effect.
+            test[aroundMe,]=test[aroundMe,]*vectorKnockDown[e]
+            
+            ## Make the prediction.
+            yHat=predict(modelFit,as.matrix(t(test[indepConnect,])),s=0.05,type="response")
+            MSE=mean((as.numeric(test[j,])-as.numeric(yHat))^2)
+            
+            ## Updating scheme.
+            top2=rnorm(n = dim(updateMe)[2],mean = mean(yHat),sd = sd(yHat))
+            
+            ## Save it.
+            updateMe[j,]<<-top2
+            
+            print(paste("Gene",j,"Iteration",b))
+            
+            res=list(Gene=row.names(exp)[j],MSE=MSE,myCoefs=myCoefs,Driver=FALSE)
+            
+          }
+          else{
+            print('Not enough Genes in Neighborhood')
+          }
+        }
         
-        ## I have to perturb the gene right here and capture the effect.
-        test[aroundMe,]=test[aroundMe,]*vectorKnockDown[e]
-        
-        ## Make the prediction.
-        yHat=predict(modelFit,as.matrix(t(test[-j,])),s=0.05,type="response")
-        MSE=mean((as.numeric(test[j,])-as.numeric(yHat))^2)
-        
-        ## Updating scheme.
-        top2=rnorm(n = dim(updateMe)[2],mean = mean(yHat),sd = sd(yHat))
-        
-        ## Save it.
-        updateMe[j,]<<-top2
-        
-        print(paste("Gene",j,"Iteration",e))
-        
-        res=list(Gene=row.names(exp)[j],Index=c(d2,j2),MSE=MSE,myCoefs=myCoefs)
       })
     })
-    
+  
     ## We have to re-attach the case to the modeled.
-    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp1)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp1)[2])))
+    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp0High)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp0High)[2])))
     colnames(design)=c("Sim","Org")
-    SimControl[[e]]=list(cbind(updateMe,exp1),design)
+    SimControl[[e]]=list(cbind(updateMe,exp0High),design)
     
     ## Do differential expression.
     contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
@@ -198,18 +304,26 @@ for (j in 1:10) {
     theTable=topTreat(tfit,coef=1,n=Inf)
     theTable=tibble::rownames_to_column(.data = theTable,var = "Geneid")
     theTable=data.table(theTable)
-    theTable=theTable[adj.P.Val<0.05] 
+    #theTable=theTable[adj.P.Val<0.05] 
     
-    ## Load the containers.
+    ## Load the containers. 
     collectTables[[e]]=theTable
     collectUpdates[[e]]=testingModel
   }
   
- collectTablesBoot[[j]]=collectTables 
+  collectTablesBoot[[b]]=collectTables 
 }
+
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                              Cell Line Validation - TYROBP
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## To collect the bootstraps and fix the look up Table.
+colnames(lookUpTable)=c("Gene","Inner","Outer")
+lookUpTable=tibble::column_to_rownames(.data = lookUpTable,var = "Gene")
+
+collectTablesBoot=pmap(collectTablesBoot,rbind)
+collectTablesBoot=map(collectTablesBoot, function(b) unique(b,by="Geneid"))
+
 
 ## TYROBP Cell Line ... do unique here.
 TYROBP=fread("/home/spirpinias/Downloads/TYROBP.KO.tsv",header = TRUE,sep='\t')
@@ -235,8 +349,18 @@ TYROBP=second[,.(Geneid,KOvsWT=logFC,APPvsWT=i.logFC,s1K01vsWT=i.logFC.1)]
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                              Cell Line Validation - ATP6V1A 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## To collect the bootstraps and fix the lookup table.
+colnames(lookUpTable)=c("Gene","Inner","Outer")
+lookUpTable=tibble::column_to_rownames(.data = lookUpTable,var = "Gene")
 
-## ATP Cell Line
+collectTablesBoot=pmap(collectTablesBoot,rbind)
+collectTablesBoot=unique(collectTablesBoot,by="Geneid")
+
+## Temporary -- March 29 -- For Subset Layers
+collectTablesBoot[[1]]=collectTablesBoot[[1]][match(row.names(exp)[unlist(layerList[1:2])],collectTables[[1]]$Geneid),]
+
+
+## ATP Neuronal Line
 ATP6V1A=fread("/home/spirpinias/Downloads/ATP6V1A.KD.tsv",header=TRUE,sep='\t')
 colnames(ATP6V1A)[2]="Geneid"
 
@@ -263,15 +387,17 @@ ATP6V1A=second[,.(Geneid,ATPkdVsWT_inAB=logFC,ATPab_kdVsWT_unchallen=i.logFC,ATP
 ##                              Results & Visualizations
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+## collectTablesBoot
+
 ## Results. TYROBP.
-ResultsFinal=map(.x = collectTables,.f = function(b) {
+ResultsFinal=map(.x = collectTablesBoot,.f = function(b) {
   finalFrame=inner_join(x = TYROBP,y = b,by="Geneid")
   finalFrame=finalFrame[,.(Geneid,KOvsWT,APPvsWT,s1K01vsWT,Simulated=logFC)]
   return(finalFrame)  
 })
 
 ## Results. ATP6V1A
-ResultsFinal=map(.x = collectTables,.f = function(b) {
+ResultsFinal=map(.x = collectTablesBoot,.f = function(b) {
   finalFrame=inner_join(x = ATP6V1A,y = b,by="Geneid")
   finalFrame=finalFrame[,.(Geneid,ATPkdVsWT_inAB,ATPab_kdVsWT_unchallen,ATPkdVsWd_in_Unchallenged,Simulated=logFC)]
   return(finalFrame)  
@@ -299,11 +425,11 @@ colors=c('Simulated'='black','ATPkdVsWT_inAB'='red','ATPab_kdVsWT_unchallen'='gr
 ResultsPlots=map(.x = ResultsFinal,.f = function(c) {
   require(ggplot2)
   ggplot(c,aes(x=1:dim(c)[1]))+
-    geom_line(aes(y=Simulated, color="Simulated"),linetype="dashed",size=0.4)+
     geom_line(aes(y=ATPkdVsWT_inAB, color="ATPkdVsWT_inAB"),size=0.4)+
     geom_line(aes(y=ATPab_kdVsWT_unchallen, color="ATPab_kdVsWT_unchallen"),size=0.4)+
     geom_line(aes(y=ATPkdVsWd_in_Unchallenged, color="ATPkdVsWd_in_Unchallenged"),size=0.4)+
-    labs(x="Genes Predicted",y="Log Fold Change",title="Cascade Effect for TYROBP Knockout",subtitle="Elastic Net",color="Legend")+
+    geom_line(aes(y=Simulated, color="Simulated"),linetype="dashed",size=0.4)+
+    labs(x="Genes Predicted",y="Log Fold Change",title="Cascade Effect for ATP6V1A Knockdown",subtitle="Elastic Net",color="Legend")+
     scale_color_manual(values=colors)
   #ggsave("/home/spirpinias/Desktop/ATPknockDown",device = "png",width=6,height=6)
 })
