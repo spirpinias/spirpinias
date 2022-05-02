@@ -73,16 +73,16 @@ buildScatterPlot=function(Gene){
 dir="/home/spirpinias/Desktop/BinZhang/pn/"
 setwd(dir)
 
-## Import Expression Dataset.
+## Import Expression Dataset that has an error with format.
 exp=fread(file = "msbb.BM_36.CDR_adjusted.PMI_AOD_race_sex_RIN_exonicRate_rRnaRate_batch_adj.tsv") %>% as.data.frame()
 exp=column_to_rownames(.data = exp,var = "V1")
 
 ## MEGENA network 
-MEGENA_network=fread("BM36_CDR_adj_himem.onlyclust.megena_out.tsv",header = T,drop=1) %>% as.data.frame
-colnames(MEGENA_network)=c("Start","Finish","Weight")
+MEGENA_network=fread("BM36_CDR_adj_himem.onlyclust.megena_out.tsv",header = FALSE,drop=1,sep = '\t')
+setnames(MEGENA_network,c("V2","V3","V4"),c("Start","Finish","Weight"))
 
 ## Use only genes in MEGENA and subset expression. Some are NA, remove them.
-genesInvolved=union(x = MEGENA_network[,1],y = MEGENA_network[,2])
+genesInvolved=union(x = MEGENA_network$Start,y = MEGENA_network$Finish)
 exp=exp[match(genesInvolved,row.names(exp)),]
 exp=exp[grepl("^NA", rownames(exp))==F,]
 
@@ -104,13 +104,6 @@ network=MEGENA_network
 
 ## Read in the Directed Graph.
 graph=graph_from_edgelist(as.matrix(network[,1:2],ncol=2), directed =T)
-#graph=graph_from_data_frame(d = network,directed = FALSE)
-
-## Adjacency Matrix. Maybe used this to weight the variables.
-#ad.matrix=as_adjacency_matrix(graph, type = c("both"))
-
-## Weight Adjanceny Matrix.
-##as_adjacency_matrix(graph = graph,attr = "weight")
 
 ## Degree Matrix. Maybe use this to weight the variables.
 de=degree(graph)
@@ -121,29 +114,25 @@ de=degree(graph)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #Importing Expression Metadata to extract AD/Normal Labels.
-ATP6V1Ameta=read.table(file = '/home/spirpinias/Desktop/BinZhang/ANN/Rcode/BM36/msbb.meta.BM_36.tsv', sep = '\t', header = TRUE)
-ATP6V1Ameta=ATP6V1Ameta[,-1]
+ATP6V1Ameta=fread(file = '/home/spirpinias/Desktop/BinZhang/ANN/Rcode/BM36/msbb.meta.BM_36.tsv', sep = '\t', header = TRUE)[!is.na(Dx.by.braak.cerad)]
 
 ## Recoding Diagnosis as Factor.
-ATP6V1Ameta$Dx.by.braak.cerad=dplyr::recode(ATP6V1Ameta$Dx.by.braak.cerad, "ADpp"=1, "Normal"=0)
-labels=as.numeric(ATP6V1Ameta$Dx.by.braak.cerad)
+ATP6V1Ameta$Dx.by.braak.cerad=dplyr::recode(ATP6V1Ameta$Dx.by.braak.cerad, "ADpp"=1, "Normal"=0) %>% as.data.table()
+ATP6V1Ameta[,Dx.by.braak.cerad:=as.factor(Dx.by.braak.cerad)]
 
 ## Removing Labels which Diagnosis is NA for the samples.
-exp=exp[-which(de==0),-which(is.na(labels)==TRUE)]
-ATP6V1Ameta=ATP6V1Ameta[-which(is.na(labels)==TRUE),]
-labels=labels[-which(is.na(labels)==TRUE)]
-
+exp=exp[-which(de==0),match(x = ATP6V1Ameta$Sampleid,table = colnames(exp))]
 
 ## Remove the genes with zero degree from connectivity and graph.
 graph=delete_vertices(graph = graph,v = which(de==0))
 de=de[-which(de==0)]
 
 ## Index to build the Layer List
-aroundMe=which(row.names(exp)=="ATP6V1A")
+aroundMe=which(row.names(exp)=="TYROBP")
 
 ## Subet for Control Only. Testing phase.
-exp0=exp[,which(labels==0)]
-exp1=exp[,which(labels==1)]
+exp0=exp[,which(ATP6V1Ameta$Dx.by.braak.cerad==0)]
+exp1=exp[,which(ATP6V1Ameta$Dx.by.braak.cerad==1)]
 
 # ## Simulation.
 splitHere=which(as.numeric(exp0[aroundMe,]<mean(as.numeric(exp0[aroundMe,])))==1)
@@ -160,10 +149,10 @@ exp1High=exp1[,-splitHere2]
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Collect the layers outside a gene. 
-layerList=lapply(1:1,function(h) c(unlist(ego(graph = graph,order = h,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1],aroundMe))
+layerList=map(1:1,function(h) c(unlist(ego(graph = graph,order = h,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1],aroundMe))
 counter=2
 while (has_element(.x = layerList,.y = integer(0))!=TRUE) {
-  layerList=lapply(1:counter,function(h) setdiff(unlist(ego(graph = graph,order = h,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1],unlist(ego(graph = graph,order = h-1,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1]))
+  layerList=map(1:counter,function(h) setdiff(unlist(ego(graph = graph,order = h,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1],unlist(ego(graph = graph,order = h-1,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1]))
   counter=counter+1
 }
 
@@ -182,10 +171,6 @@ vectorKnockDown=c(1/2)
 OverExpress=c(1.50)
 numNeighbor=1
 
-## Only Keydrivers in 3 layers. TEMPORARY.
-MEGENA_keydrivers=MEGENA_keydrivers[match(intersect(unlist(layerList[1:3]),MEGENA_keydrivers$Index),MEGENA_keydrivers$Index),]
-
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                                  Modeling
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -195,11 +180,11 @@ for (b in 1:2) {
   for (e in 1:length(vectorKnockDown)) {
     
     ## Make a copy.
-    updateMe=exp0High
-
-    testingModel=imap(head(layerList,2),function (d,d2){
+    updateMe=exp1High
+    
+    testingModel=imap(layerList,function (d,d2){
       
-        
+      
       imap(d, function(j,j2){
         
         if (b==1) {
@@ -207,7 +192,7 @@ for (b in 1:2) {
         }
         
         ## Recopy TYROBP to correct after perturbing.
-        updateMe[aroundMe,]=exp0High[aroundMe,]
+        updateMe[aroundMe,]=exp1High[aroundMe,]
         
         ## Split the Data.
         splitData=dim(updateMe)[2]
@@ -221,8 +206,17 @@ for (b in 1:2) {
         
         ## Intersect with keydrivers to find the variables.
         indep=intersect(unlist(ego(graph = graph,order = numNeighbor,nodes = j,mode = c("all")))[-1],MEGENA_keydrivers$Index)
+
+        ## April 25th Notes.
+        ## Consider the union of key drivers AND highest connectivity. 
+        ## If Less Than 5 Drivers -- Add in highest connectivity.
+        ## If the graph can interactively show us which nodes were visited.
+        ## We can label the nodes that had a fold change/responded.
+        ## Significant Genes vs Insignificant Genes.
+        ## Try to find algorithm with continuous weights. 
+        ## Maybe a regression function.
         
-        if (length(indep)>=2) {
+        if (length(indep)>=2 & length(indep)<6 & prod(apply(t(train[indep,]),2,var))!=0) {
           
           # Modeling
           modelFit=glmnet::glmnet(x = as.matrix(t(train[indep,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100)
@@ -230,6 +224,8 @@ for (b in 1:2) {
           ## Coefficients
           myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
           myCoefs=myCoefs[myCoefs[,1]!=0,]
+          myCoefs=as.data.frame(as.matrix(myCoefs))
+          colnames(myCoefs)="Coefficients"
           
           ## I have to perturb the gene right here and capture the effect.
           test[aroundMe,]=test[aroundMe,]*vectorKnockDown[e]
@@ -255,15 +251,21 @@ for (b in 1:2) {
           
           ## Sort the dataframe in order of highest connectivity.
           connectMe=connectMe[order(-connectMe$Connect),]
-          indepConnect=head(connectMe$Index,n=5)
+          indepConnect=head(connectMe$Index,n=10)
           
-          if(length(indepConnect)>= 2) {
+          ## Merge Drivers and Connectivity
+          indepConnect=union(indepConnect,indep)
+          
+          if(length(indepConnect)>= 2 & prod(apply(t(train[indepConnect,]),2,var))!=0) {
+            
             ## Modeling
             modelFit=glmnet::glmnet(x = as.matrix(t(train[indepConnect,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100)
             
             ## Coefficients
             myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
             myCoefs=myCoefs[myCoefs[,1]!=0,]
+            myCoefs=as.data.frame(as.matrix(myCoefs))
+            colnames(myCoefs)="Coefficients"
             
             ## I have to perturb the gene right here and capture the effect.
             test[aroundMe,]=test[aroundMe,]*vectorKnockDown[e]
@@ -290,11 +292,11 @@ for (b in 1:2) {
         
       })
     })
-  
+    
     ## We have to re-attach the case to the modeled.
-    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp0High)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp0High)[2])))
+    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp1High)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp1High)[2])))
     colnames(design)=c("Sim","Org")
-    SimControl[[e]]=list(cbind(updateMe,exp0High),design)
+    SimControl[[e]]=list(cbind(updateMe,exp1High),design)
     
     ## Do differential expression.
     contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
@@ -306,8 +308,15 @@ for (b in 1:2) {
     theTable=data.table(theTable)
     #theTable=theTable[adj.P.Val<0.05] 
     
-    ## Load the containers. 
+    ## Load the containers and clean it up for only models with gene.
     collectTables[[e]]=theTable
+    
+    ## Removes Zero Intersections and keep models with ATP6V1A.
+    for (j in 1:length(testingModel)) {
+      testingModel[[j]]=discard(.x = testingModel[[j]],.p = function(a) is.character(a))
+      testingModel[[j]]=keep(.x = testingModel[[j]],.p = function(a) as.character(row.names(exp)[aroundMe]) %in% row.names(a$myCoefs))
+      testingModel[[j]]=compact(testingModel[[j]])
+    }
     collectUpdates[[e]]=testingModel
   }
   
@@ -324,22 +333,20 @@ lookUpTable=tibble::column_to_rownames(.data = lookUpTable,var = "Gene")
 collectTablesBoot=pmap(collectTablesBoot,rbind)
 collectTablesBoot=map(collectTablesBoot, function(b) unique(b,by="Geneid"))
 
+## Subset the Table for only Genes with ATP6V1A as Coefficient.
+
+collectTablesBoot[[1]]=collectTablesBoot[[1]][match(unlist(map(collectUpdates[[1]],function(a) map(a, function(b) b$Gene))),collectTablesBoot[[1]]$Geneid),]
+
 
 ## TYROBP Cell Line ... do unique here.
 TYROBP=fread("/home/spirpinias/Downloads/TYROBP.KO.tsv",header = TRUE,sep='\t')
+TYROBP=unique(x = TYROBP,by=c("Geneid","Contrast"))
+TYROBP$Geneid=toupper(TYROBP$Geneid)
 
 ## Subset TYROBP Contrasts into respective dataframes and clean out any repeats.
 TYROKOWT=TYROBP[Contrast=="KO.vs.WT"]
-TYROKOWT=unique(TYROKOWT,by="Geneid")
 TYROAPPWT=TYROBP[Contrast=="AppPs1KO.vs.WT"]
-TYROAPPWT=unique(TYROAPPWT,by="Geneid")
 TYROPs1KO1WT=TYROBP[Contrast=="AppPs1KO.vs.AppPs1WT"]
-TYROPs1KO1WT=unique(TYROPs1KO1WT,by="Geneid")
-
-## Uppercase the gene names.
-TYROKOWT$Geneid=toupper(TYROKOWT$Geneid)
-TYROAPPWT$Geneid=toupper(TYROAPPWT$Geneid)
-TYROPs1KO1WT$Geneid=toupper(TYROPs1KO1WT$Geneid)
 
 ## As to ensure the tables are in identical order.
 first=TYROKOWT[TYROAPPWT,on=.(Geneid),.(Geneid,logFC,i.logFC)]
@@ -347,35 +354,33 @@ second=first[TYROPs1KO1WT,on=.(Geneid),]
 TYROBP=second[,.(Geneid,KOvsWT=logFC,APPvsWT=i.logFC,s1K01vsWT=i.logFC.1)]
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-##                              Cell Line Validation - ATP6V1A 
+##                              Organization
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 ## To collect the bootstraps and fix the lookup table.
 colnames(lookUpTable)=c("Gene","Inner","Outer")
 lookUpTable=tibble::column_to_rownames(.data = lookUpTable,var = "Gene")
 
+## Merge the Bootstraps.
 collectTablesBoot=pmap(collectTablesBoot,rbind)
 collectTablesBoot=unique(collectTablesBoot,by="Geneid")
 
-## Temporary -- March 29 -- For Subset Layers
-collectTablesBoot[[1]]=collectTablesBoot[[1]][match(row.names(exp)[unlist(layerList[1:2])],collectTables[[1]]$Geneid),]
+## Subset the Table for only Genes with ATP6V1A as Coefficient.
+collectTablesBoot[[1]]=collectTablesBoot[[1]][match(unlist(map(collectUpdates[[1]],function(a) map(a, function(b) b$Gene))),collectTablesBoot[[1]]$Geneid),]
 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                          Cell Line Validation - ATP6V1A
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## ATP Neuronal Line
-ATP6V1A=fread("/home/spirpinias/Downloads/ATP6V1A.KD.tsv",header=TRUE,sep='\t')
-colnames(ATP6V1A)[2]="Geneid"
+ATP6V1A=fread("/home/spirpinias/Downloads/ATP6V1A.KD.tsv",header=TRUE,sep='\t',drop=1)
+setnames(ATP6V1A,"Symbol","Geneid")
+ATP6V1A=unique(x = ATP6V1A,by=c("Geneid","Contrast"))
 
 ## Subset ATP6V1A 
-ATPkdVSwt_in_ab=ATP6V1A[Contrast=="KD.vs.WT.in.Ab"][,-1]
-ATPkdVSwt_in_ab=unique(ATPkdVSwt_in_ab,by="Geneid")
-ATPab_kdVSWT_unchallen=ATP6V1A[Contrast=="Ab_KD.vs.WT_unchallenged"][,-1]
-ATPab_kdVSWT_unchallen=unique(ATPab_kdVSWT_unchallen,by="Geneid")
-ATPkd_vs_wd_in_unchallenged=ATP6V1A[Contrast=="KD.vs.WT.in.unchallenged"][,-1]
-ATPkd_vs_wd_in_unchallenged=unique(ATPkd_vs_wd_in_unchallenged,by="Geneid")
-
-## Uppertcase the Gene Names
-ATPkdVSwt_in_ab$Geneid=toupper(ATPkdVSwt_in_ab$Geneid)
-ATPab_kdVSWT_unchallen$Geneid=toupper(ATPab_kdVSWT_unchallen$Geneid)
-ATPkd_vs_wd_in_unchallenged$Geneid=toupper(ATPkd_vs_wd_in_unchallenged$Geneid)
+ATPkdVSwt_in_ab=ATP6V1A[Contrast=="KD.vs.WT.in.Ab"]
+ATPab_kdVSWT_unchallen=ATP6V1A[Contrast=="Ab_KD.vs.WT_unchallenged"]
+ATPkd_vs_wd_in_unchallenged=ATP6V1A[Contrast=="KD.vs.WT.in.unchallenged"]
 
 ## ATP6V1A
 first=ATPkdVSwt_in_ab[ATPab_kdVSWT_unchallen,on=.(Geneid),.(Geneid,logFC,i.logFC)]
@@ -387,22 +392,21 @@ ATP6V1A=second[,.(Geneid,ATPkdVsWT_inAB=logFC,ATPab_kdVsWT_unchallen=i.logFC,ATP
 ##                              Results & Visualizations
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## collectTablesBoot
-
 ## Results. TYROBP.
 ResultsFinal=map(.x = collectTablesBoot,.f = function(b) {
-  finalFrame=inner_join(x = TYROBP,y = b,by="Geneid")
+  finalFrame=b[TYROBP,on=.(Geneid=Geneid)][!is.na(t)]
   finalFrame=finalFrame[,.(Geneid,KOvsWT,APPvsWT,s1K01vsWT,Simulated=logFC)]
   return(finalFrame)  
 })
 
 ## Results. ATP6V1A
 ResultsFinal=map(.x = collectTablesBoot,.f = function(b) {
-  finalFrame=inner_join(x = ATP6V1A,y = b,by="Geneid")
+  finalFrame=b[ATP6V1A,on=.(Geneid=Geneid)][!is.na(t)]
   finalFrame=finalFrame[,.(Geneid,ATPkdVsWT_inAB,ATPab_kdVsWT_unchallen,ATPkdVsWd_in_Unchallenged,Simulated=logFC)]
   return(finalFrame)  
 })
 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Plot the Results.
 colors=c('Simulated'='black','KOvsWT'='red','APPvsWT'='green','s1K01vsWT'='yellow')
@@ -429,7 +433,7 @@ ResultsPlots=map(.x = ResultsFinal,.f = function(c) {
     geom_line(aes(y=ATPab_kdVsWT_unchallen, color="ATPab_kdVsWT_unchallen"),size=0.4)+
     geom_line(aes(y=ATPkdVsWd_in_Unchallenged, color="ATPkdVsWd_in_Unchallenged"),size=0.4)+
     geom_line(aes(y=Simulated, color="Simulated"),linetype="dashed",size=0.4)+
-    labs(x="Genes Predicted",y="Log Fold Change",title="Cascade Effect for ATP6V1A Knockdown",subtitle="Elastic Net",color="Legend")+
+    labs(x="Genes with ATP6V1A as Coefficient",y="Log Fold Change",title="Cascade Effect for ATP6V1A Knockdown",subtitle="Elastic Net",color="Legend")+
     scale_color_manual(values=colors)
   #ggsave("/home/spirpinias/Desktop/ATPknockDown",device = "png",width=6,height=6)
 })
