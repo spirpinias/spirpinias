@@ -14,6 +14,7 @@
 ##                       Developed by Stephen Pirpinias
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+require(tictoc)
 require(igraph)
 require(purrr)
 require(dplyr)
@@ -87,13 +88,13 @@ exp=exp[match(genesInvolved,row.names(exp)),]
 exp=exp[grepl("^NA", rownames(exp))==F,]
 
 ## MEGENA keydrivers
-MEGENA_keydrivers=read.delim("all_BN_keydrivers_CTD_subtypes.txt",header = T)
-MEGENA_keydrivers=data.frame(Keydriver=intersect(MEGENA_keydrivers$keydrivers,row.names(exp)),Index=match(intersect(MEGENA_keydrivers$keydrivers,row.names(exp)),row.names(exp)))
+MEGENA_keydrivers=fread("all_BN_keydrivers_CTD_subtypes.txt",header = T)
+MEGENA_keydrivers=data.table(Keydriver=intersect(MEGENA_keydrivers$keydrivers,row.names(exp)),Index=match(intersect(MEGENA_keydrivers$keydrivers,row.names(exp)),row.names(exp)))
 
 
 ## Encode the network based on indices.
-MEGENA_network=data.frame(Start=match(MEGENA_network$Start,row.names(exp)),Finish=match(MEGENA_network$Finish,row.names(exp)),Weight=MEGENA_network$Weight) %>% na.omit() %>% as.data.frame()
-
+MEGENA_network=data.table(Start=match(MEGENA_network$Start,row.names(exp)),Finish=match(MEGENA_network$Finish,row.names(exp)),Weight=MEGENA_network$Weight)[!is.na(Start)]
+MEGENA_network=MEGENA_network[!is.na(Finish)]
 
 ## Ready
 network=MEGENA_network
@@ -147,7 +148,6 @@ exp1High=exp1[,-splitHere2]
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                               Building the Layers
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 ## Collect the layers outside a gene. 
 layerList=map(1:1,function(h) c(unlist(ego(graph = graph,order = h,nodes = aroundMe,mode = c("all"),mindist = 0)[1])[-1],aroundMe))
 counter=2
@@ -206,7 +206,7 @@ for (b in 1:2) {
         
         ## Intersect with keydrivers to find the variables.
         indep=intersect(unlist(ego(graph = graph,order = numNeighbor,nodes = j,mode = c("all")))[-1],MEGENA_keydrivers$Index)
-
+        
         ## April 25th Notes.
         ## Consider the union of key drivers AND highest connectivity. 
         ## If Less Than 5 Drivers -- Add in highest connectivity.
@@ -336,7 +336,6 @@ collectTablesBoot=map(collectTablesBoot, function(b) unique(b,by="Geneid"))
 ## Subset the Table for only Genes with ATP6V1A as Coefficient.
 
 collectTablesBoot[[1]]=collectTablesBoot[[1]][match(unlist(map(collectUpdates[[1]],function(a) map(a, function(b) b$Gene))),collectTablesBoot[[1]]$Geneid),]
-
 
 ## TYROBP Cell Line ... do unique here.
 TYROBP=fread("/home/spirpinias/Downloads/TYROBP.KO.tsv",header = TRUE,sep='\t')
