@@ -10,7 +10,7 @@
 
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-##                      Predictive Networks with Weights 
+##                            Predictive Networks  
 ##                       Developed by Stephen Pirpinias
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -25,46 +25,6 @@ require(limma)
 require(data.table)
 require(magrittr)
 require(gt)
-
-
-## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-##                          Functions 
-## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-findGene=function(geneName){
-  
-  ## Example testing=findGene("ATP6V1A") 
-  firstX=which(row.names(lookUpTable)==as.character(geneName))
-  secondX=lookUpTable[firstX,]
-  thirdX=collectUpdates[[1]][[as.numeric(secondX$Inner)]][[as.numeric(secondX$Outer)]]
-  thirdX$myCoefs=names(thirdX$myCoefs)[-1]
-  return(thirdX)
-}
-
-buildSubNetwork=function(target,predictors){
-  require(visNetwork)
-  
-  ## Example testing2=buildSubNetwork(testing$Gene,testing$myCoefs)
-  center=which(row.names(exp)==as.character(target))
-  neigh=match(x = predictors,table = row.names(exp))
-  subGraph=induced.subgraph(graph = graph,v = as.numeric(c(center,neigh)),impl = "auto")
-  V(subGraph)[1]$color="red"
-  outGraph=plot(x = subGraph,vertex.size=28,vertex.shape="circle",vertex.label=row.names(exp)[c(center,neigh)],vertex.label.cex=1)
-  
-  return(outGraph)
-}
-
-buildScatterPlot=function(Gene){
-  
-  ## UpdatedMe/Original
-  scat=which(row.names(exp)==as.character(Gene))
-  Skim=data.frame(Expression=c(as.numeric(SimControl[[1]][[1]][scat,1:27]),as.numeric(SimControl[[1]][[1]][scat,28:54])),
-                  Labels=SimControl[[1]][[2]][,1])
-  Skim$Labels=dplyr::recode(Skim$Labels, "1"="Simulated", "0"="Original")
-  p=ggplot(data = Skim,mapping = aes(x=Expression,color=Labels))+geom_density()+labs(title=paste("Distribution of",as.character(Gene)))
-  return(p)  
-}
-
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ##                          Data Preparation 
@@ -129,7 +89,7 @@ graph=delete_vertices(graph = graph,v = which(de==0))
 de=de[-which(de==0)]
 
 ## Index to build the Layer List
-aroundMe=which(row.names(exp)=="TYROBP")
+aroundMe=which(row.names(exp)=="ATP6V1A")
 
 ## Subet for Control Only. Testing phase.
 exp0=exp[,which(ATP6V1Ameta$Dx.by.braak.cerad==0)]
@@ -180,7 +140,7 @@ for (b in 1:2) {
   for (e in 1:length(vectorKnockDown)) {
     
     ## Make a copy.
-    updateMe=exp1High
+    updateMe=exp0High
     
     testingModel=imap(layerList,function (d,d2){
       
@@ -192,7 +152,7 @@ for (b in 1:2) {
         }
         
         ## Recopy TYROBP to correct after perturbing.
-        updateMe[aroundMe,]=exp1High[aroundMe,]
+        updateMe[aroundMe,]=exp0High[aroundMe,]
         
         ## Split the Data.
         splitData=dim(updateMe)[2]
@@ -207,19 +167,10 @@ for (b in 1:2) {
         ## Intersect with keydrivers to find the variables.
         indep=intersect(unlist(ego(graph = graph,order = numNeighbor,nodes = j,mode = c("all")))[-1],MEGENA_keydrivers$Index)
         
-        ## April 25th Notes.
-        ## Consider the union of key drivers AND highest connectivity. 
-        ## If Less Than 5 Drivers -- Add in highest connectivity.
-        ## If the graph can interactively show us which nodes were visited.
-        ## We can label the nodes that had a fold change/responded.
-        ## Significant Genes vs Insignificant Genes.
-        ## Try to find algorithm with continuous weights. 
-        ## Maybe a regression function.
-        
         if (length(indep)>=2 & length(indep)<6 & prod(apply(t(train[indep,]),2,var))!=0) {
           
           # Modeling
-          modelFit=glmnet::glmnet(x = as.matrix(t(train[indep,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100)
+          modelFit=glmnet::glmnet(x = as.matrix(t(train[indep,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100,upper.limits = rep.int(x=1,times=length(indep)),lower.limits = rep.int(x=-1,times=length(indep)))
           
           ## Coefficients
           myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
@@ -259,7 +210,7 @@ for (b in 1:2) {
           if(length(indepConnect)>= 2 & prod(apply(t(train[indepConnect,]),2,var))!=0) {
             
             ## Modeling
-            modelFit=glmnet::glmnet(x = as.matrix(t(train[indepConnect,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100)
+            modelFit=glmnet::glmnet(x = as.matrix(t(train[indepConnect,])),y = as.numeric(train[j,]),alpha = 0.5,nlambda = 100,upper.limits = rep.int(x=1,times=length(indepConnect)),lower.limits=rep.int(x=-1,times=length(indepConnect)))
             
             ## Coefficients
             myCoefs=coef(modelFit,s=0.05,exact=FALSE)  
@@ -294,9 +245,9 @@ for (b in 1:2) {
     })
     
     ## We have to re-attach the case to the modeled.
-    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp1High)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp1High)[2])))
+    design=model.matrix(~0+c(rep(1,dim(updateMe)[2]),rep(0,dim(exp0High)[2]))+c(rep(0,dim(updateMe)[2]),rep(1,dim(exp0High)[2])))
     colnames(design)=c("Sim","Org")
-    SimControl[[e]]=list(cbind(updateMe,exp1High),design)
+    SimControl[[e]]=list(cbind(updateMe,exp0High),design)
     
     ## Do differential expression.
     contr.matrix=makeContrasts(SimvsOrg=Sim-Org,levels=colnames(design))
